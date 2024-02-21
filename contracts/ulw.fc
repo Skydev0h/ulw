@@ -1,0 +1,65 @@
+#pragma version =0.4.4;
+#include "imports/stdlib.fc";
+
+;; Ultralight Wallet
+
+{-
+Storage:
+    uint256 public_key
+
+Message:
+    ref signed_data:
+        ref c4
+            uint256 new_public_key (MUST BE NOT THE SAME AS CURRENT public_key)
+        ref c5
+            <action list>
+    bits512 signature
+
+Private key can be obtained as sha256(key_material || seq_no)
+-}
+
+() return_unless(int cond) impure asm "IFNOTRET";
+() set_actions(cell c) impure asm "c5 POP";
+
+() ___rebuild_root_cell__() impure asm """
+"0.4.4" require-asm-fif-version
+@atend @ 1 { execute
+    current@ context@ current!
+    {
+        }END> b>
+        <s ref@
+        <{
+            // SETCP0
+            swap 0 swap @procdictkeylen idict@ { "main is not defined" abort } ifnot @addop
+        }>
+        b>
+    }
+    : }END>c
+    current@ context! current!
+} does @atend !
+""";
+
+() main(slice body, int methodId) impure {
+
+    ___rebuild_root_cell__();
+
+    ;; immediately return if methodId = 0 (internal messages)
+    return_unless(methodId);
+
+    cell signed = body~load_ref();
+    slice signature = body;
+
+    int public_key = get_data().begin_parse().preload_uint(256);
+
+    return_unless(check_signature(cell_hash(signed), signature, public_key));
+
+    slice signed_data = signed.begin_parse();
+    cell new_data = signed_data~load_ref();
+    cell actions = signed_data.preload_ref();
+
+    accept_message();
+
+    set_actions(actions);
+    set_data(new_data);
+
+}
